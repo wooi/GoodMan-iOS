@@ -11,6 +11,7 @@ struct ContentView: View {
     let items = ["CHN", "AUS", "EUR", "HK", "JPN", "BRA", "CAN", "KOR", "TW", "UK"]
     @ObservedObject var viewModel = ViewModel()
     @State private var isSheetPresented = false
+    @State private var isAddSheetPresented = false
     @ObservedObject private var keyboard = KeyboardResponder()
 
     var body: some View {
@@ -91,7 +92,10 @@ struct ContentView: View {
                                 self.viewModel.fetchData()
                             }
                         Image(systemName: "plus.square.fill.on.square.fill")
-
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                isAddSheetPresented = true
+                            }
                     }
                     .padding(.top)
                     .padding(.trailing)
@@ -99,17 +103,29 @@ struct ContentView: View {
                     
                     VStack {
                         List {
-                            ForEach(0..<viewModel.items.count, id: \.self) { index in
+                            ForEach(viewModel.items, id: \.countryCode) { item in
                                 ExchangeItemView(
-                                    exchangeRateData: viewModel.items[index],
+                                    exchangeRateData: item,
                                     inputValue: Binding(
-                                        get: { viewModel.items[index].price },
+                                        get: { item.price },
                                         set: { newPrice in
-                                            viewModel.changeEdit(newPrice: newPrice, countryCode: viewModel.items[index].countryCode)
+                                            viewModel.changeEdit(newPrice: newPrice, countryCode: item.countryCode)
                                         }
                                     )
                                 )
                                 .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        withAnimation {
+                                            viewModel.removeCurrency(countryCode: item.countryCode)
+                                        }
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
+                            }
+                            .onMove { source, destination in
+                                viewModel.moveCurrency(from: source, to: destination)
                             }
                         }
                         .listStyle(.plain)
@@ -130,6 +146,9 @@ struct ContentView: View {
                 Text("sheet")
                     .presentationDetents([.large])
                     .presentationBackground(.thinMaterial)
+            }
+            .sheet(isPresented: $isAddSheetPresented) {
+                AddCurrencySheet(viewModel: viewModel, isPresented: $isAddSheetPresented)
             }
             .onTapGesture {
                 print("Root tapped")
@@ -188,6 +207,59 @@ struct ExchangeItemView: View {
             Spacer()
 
             CurrencyView(inputValue: $inputValue)
+        }
+    }
+}
+
+struct AddCurrencySheet: View {
+    @ObservedObject var viewModel: ViewModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.availableToAdd.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("没有可添加的货币")
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                } else {
+                    List(viewModel.availableToAdd, id: \.countryCode) { item in
+                        Button {
+                            viewModel.addCurrency(countryCode: item.countryCode)
+                            isPresented = false
+                        } label: {
+                            HStack {
+                                Image(addPrefix(to: item.countryCode))
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 40, height: 40)
+                                VStack(alignment: .leading) {
+                                    Text(item.currencyCode)
+                                        .bold()
+                                        .foregroundColor(.black)
+                                    Text(item.currencyName)
+                                        .font(Font.system(size: 12))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.leading, 4)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("添加货币")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("取消") { isPresented = false }
+                }
+            }
         }
     }
 }

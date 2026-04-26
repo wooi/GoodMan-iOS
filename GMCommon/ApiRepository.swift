@@ -43,47 +43,36 @@ class ApiRepository {
     }
 
     func parseHTML(htmlString: String) -> ExchangeRateDataList? {
-        let numberSet: Set<String> = ["CNY","AUD","EUR","HKD","JPY","BRL","CAD","KRW","GBP", "USD"]
-
         do {
             let doc = try SwiftSoup.parse(htmlString)
             let date = try doc.select("h3").first()?.text()
-
-            // 通过标签和类名选择元素
             let tboby = try doc.select("tbody")
 
             var list = ExchangeRateDataList(date: date?.toDate(), baseCurrencyCode: CurrencyCode.EUR, baseCurrencyName: "")
             let currencyElements = try tboby.select("tr")
+            let countryConstant = CountryConstant()
 
             for currencyElement in currencyElements {
-                // 提取货币代码
                 let rateData = ExchangeRateData(date: date?.toDate())
-                
-                if let currencyCode = try? currencyElement.select(".currency a").text() {
-//                    print(currencyCode)
-                    if(!numberSet.contains(currencyCode)) {
-                        continue
-                    }
-                    rateData.currencyCode = currencyCode
-                    rateData.countryCode = CountryConstant().getAlpha3Code(forCurrencyCode: currencyCode) ?? ""
+
+                guard let currencyCode = try? currencyElement.select(".currency a").text(),
+                      !currencyCode.isEmpty,
+                      let alpha3 = countryConstant.getAlpha3Code(forCurrencyCode: currencyCode) else {
+                    continue
                 }
+                rateData.currencyCode = currencyCode
+                rateData.countryCode = alpha3
 
                 if let currencyName = try? currencyElement.select(".alignLeft a").text() {
                     rateData.currencyName = currencyName
                 }
-
                 if let exchangeRate = try? currencyElement.select(".spot .rate").text() {
                     rateData.exchangeRate = Double(exchangeRate) ?? 0
                 }
-
                 if let trend = try? currencyElement.select(".spot .trend").text() {
                     rateData.trend = trend
                 }
                 list.exchangeDataList.append(rateData)
-            }
-            for item in list.exchangeDataList {
-                print(item.countryCode)
-                print(item.exchangeRate)
             }
             return list
         } catch {
